@@ -1,8 +1,18 @@
+import re
 from flask import Flask
-app = Flask(__name__)
+from flask import request
 from flask_httpauth import HTTPBasicAuth
+
+from WT_Project.user import *
+from WT_Project.calendar import *
+from WT_Project.database import *
+#from json import *
+
 from werkzeug.security import generate_password_hash, check_password_hash
+
+
 auth = HTTPBasicAuth()
+app = Flask(__name__)
 
 @app.route('/')
 def index():
@@ -11,35 +21,67 @@ def index():
 @app.route('/home')
 @auth.login_required
 def home():
-    return '<h1>Hello Stranger!</h1>'
+    #do some meta-magic
+    return "Up and running"
 
 @app.route('/calendar')
 @auth.login_required
 def calendar():
-    return '<h1>Today is not the day</h1>'
+    data = request.get_json()
+    if dFetch_data(data["token"]):
+        if data["action"] == "ret":
+            return cRetrieveDate(data["token"],data["date"])
+        if data["action"] == "reg":
+            return cRegisterDate(data["token"],data["date"])
+        if data["action"] == "chk":
+            return cIsAvailable(data["token"],data["date"])
 
 @app.route('/login')
 def login():
-    return '<h1>Are you here to define yourself?</h1>'
+    user_data = request.get_json()
+    if uLogin(user_data):
+        req = [user_data["user"],user_data["password"]]
+        token = dFetch_data(req)
+        if token:
+            return token
+        else:
+            return "Bad thing"
+    else:
+        return "User not recognized"
 
 @app.route('/register')
 def register():
-    return '<h1>Are you here to introduce yourself?</h1>'
+    user_data = request.get_json()
+    if uRegister(user_data):
+        req = [user_data["user"],user_data["password"]]
+        token = dFetch_data(req)
+        if token:
+            return token
+        else:
+            return uGenerate_token(user_data["user"], user_data["password"]) 
+    else:
+        return uGenerate_error(user_data)
 
 @app.route('/appointments')
 @auth.login_required
 def appointments():
-    return '<h1>You are indeed not busy today</h1>'
+    data = request.get_json()
+    if uLogin(data["token"]):
+        return cRetrieveDate(data["token"], data["date"])
 
 @app.route('/book')
 @auth.login_required
 def book():
-    return '<h1>You cannot use this feature yet</h1>'
+    data = request.get_json()
+    if uLogin(data["token"]):
+        return cRegisterDate(data["token"], data["date"])
 
 @app.route('/admin')
 @auth.login_required
 def admin():
-    return '<h1>You have the power!!</h1>'
+    data = request.get_json()
+    if uLogin(data["token"]) == "a":
+        return uAllowRegistration(data["user"], data["password"])
 
 app.run()
 

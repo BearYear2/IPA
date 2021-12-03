@@ -2,9 +2,12 @@
 
 #Dont forget about JSON
 
-def retrieveDate():
+import json
+import database
+
+def cRetrieveDate(user,date):
     pass
-def isAvailable():
+def cIsAvailable(user,date):
     pass
-def registerDate():
+def cRegisterDate(user,date):
     pass

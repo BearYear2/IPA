@@ -5,29 +5,42 @@
 #how do you receive post?
 
 #Don't forget about JSON
+import json
+from WT_Project.database import *
+import database
 
+def uGenerate_token(username, password):
+    #meta-magic token creation
+    token = []
+    return token
+def uGenerate_error(json_data):
+    return "bad"
 #User
-def register():
+def uRegister(user, password):
+    token = uGenerate_token(user,password)
+    dSend_data(token)
+    return True
+def uLogin(user, password):
+    if dFetch_data(user) and dFetch_data(password):
+        return dFetch_data(uGenerate_token(user,password))
+
+def uBook():
     pass
-def login():
-    pass
-def book():
-    pass
-def appointments():
+def uAppointments():
     pass
 
 #Medic
-def allowBook():
+def uAllowBook():
     pass
-def checkAppoints():
+def uCheckAppoints():
     pass
-def checkPatients():
+def uCheckPatients():
     pass
 
 #Nurse
-def allowBookFor():
+def uAllowBookFor():
     pass
 
 #Admin
-def allowRegistration():
+def uAllowRegistration():
     pass
