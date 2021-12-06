@@ -10,8 +10,13 @@
 #500 Internal Server Error
 
 from ctypes import resize
+import re
+
+import json
 
 from flask.json import jsonify
+from flask.templating import render_template
+from flask.wrappers import Response
 import Modules.MyApp as flApp
 
 import Modules.MyDatabase as MyDatabase
@@ -28,71 +33,98 @@ request = flApp.request
 
 @app.route('/')
 def index():
-    return '<h1>Hello World!</h1>'
+    return Response(
+            response= json.dumps({'message':'Good Work'}),
+            status = 200,
+            mimetype="application/json"
+        )
 
 @app.route('/home')
 def home():
-    #do some meta-magic
-    return "Up and running"
+    return Response(
+            response= json.dumps({'message':'Good Work'}),
+            status = 200,
+            mimetype="application/json"
+        )
 
-@app.route('/calendar')
+@app.route('/calendar', methods = ['Get', 'POST'])
 def calendar():
     data = request.get_json()
     if MyDatabase.dFetch_data(data["token"]):
-        if data["action"] == "ret":
-            return MyCalendar.cRetrieveDate(data["token"],data["date"])
-        if data["action"] == "reg":
-            return MyCalendar.cRegisterDate(data["token"],data["date"])
-        if data["action"] == "chk":
-            return MyCalendar.cIsAvailable(data["token"],data["date"])
-
-@app.route('/login', methods =['POST'])
+        if request.method == 'POST':
+            return Response(
+                response = json.dumps(MyCalendar.cRegisterDate(data["token"],data["date"])),
+                status = 200,
+                mimetype = "application/json"
+            )
+        if request.method == 'GET':
+            return Response(
+                response = json.dumps(MyCalendar.cRetrieveDate(data["token"],data["date"])),
+                status = 200,
+                mimetype = "application/json"
+            )
+    else:
+        return Response(
+        response= json.dumps({'message':'Invalid token provided', 'error':'Bad Request'}),
+        status = 400,
+        mimetype="application/json"
+        )
+    
+    
+@app.route('/login', methods =['POST', 'GET'])
 def login():
     user_data = request.get_json()
-    answer = None
+    user = user_data["user"]
     password = {"password":generate_password_hash(user_data["password"])}
-    if MyUser.uLogin(user_data["user"],password):
-        inp = [user_data["user"],password]
-        res = ["token"]
-        MyDatabase.dFetch_data(inp)
-        token = res
-        if token:
-            answer = jsonify({'token':token})
-            res = ["role"]
-            MyDatabase.dFetch_data(answer,res)
-            #auth.current_user = res
-            return answer
-        else:
-            answer = jsonify({'token':False})
-            return answer
+    token = MyUser.uLogin(user,password)
+    if token:
+        return Response(
+            response = json.dumps({"token":token}),
+            status = 200,
+            mimetype = "application/json"
+            )
     else:
-        answer = jsonify({'token':False})
-        return answer
-#@auth.error_handler
-def auth_error():
-    return jsonify({'message':'Invalid credentials'})
+        return Response(
+            response = json.dumps({'message':'Invalid token or token expired'}),
+            status = 400,
+            mimetype = "application/json"
+        )
 
-@app.route('/register', methods =['POST'])
+
+
+@app.route('/register', methods =['POST', 'GET'])
 def register():
-    user_data = request.get_json()
-    if MyUser.uRegister(user_data):
-        password = {"password":generate_password_hash(user_data["password"])}
-        req = [user_data["user"],password, user_data["role"]]
-        token = MyDatabase.dFetch_data(req)
-        if token:
-            return token
-        else:
-            return MyUser.uGenerate_token(user_data["user"], user_data["password"]) 
+    user_data = request.get_json(force=True)
+    user = user_data["user"]
+    password = generate_password_hash(user_data["password"])
+    if MyUser.uLogin(user,password):
+        return Response(
+            response = json.dumps({"message":"User already exists in the database", 'error':"User exists"}),
+            status = 400,
+            mimetype = "application/json"
+        )
     else:
-        return MyUser.uGenerate_error(user_data)
+        token = MyUser.uRegister(user, password)
+        if token:
+            return Response(
+            response = json.dumps({"message":"user created", "token":token}),
+            status = 200,
+            mimetype = "application/json"
+        )
+        else:
+            return Response(
+            response = json.dumps({"message":"Token could not be created", 'error':"Bad token"}),
+            status = 500,
+            mimetype = "application/json"
+        )
 
-@app.route('/appointments')
+@app.route('/appointments', methods =['GET'])
 def appointments():
     data = request.get_json()
     if MyUser.uLogin(data["token"]):
         return MyCalendar.cRetrieveDate(data["token"], data["date"])
 
-@app.route('/book')
+@app.route('/book', methods =['POST'])
 def book():
     data = request.get_json()
     if MyUser.uLogin(data["token"]):
@@ -100,31 +132,52 @@ def book():
         return MyUser.uBook(data["user"], data["date"])
 
 
-@app.route('/admin')
+@app.route('/admin', methods = ['POST'])
 def admin():
-    data = request.get_json()
-    if MyUser.uLogin(data["token"]) == "a":
-        password = {"password",generate_password_hash(data["password"])}
-        return MyUser.uAllowRegistration(data["user"], password)
-
-
+    data = request.get_json(force=True)
+    success = MyDatabase.dSend_data(data)
+    print(data)
+    if data == None:
+        return Response(
+            response= json.dumps({'error':'resource not found','message':"error"}),
+            status = 500,
+            mimetype="application/json"
+        )
+    #if success == True:
+       # return Response(
+        #        response= json.dumps({'content':data,'message':"added "}),
+         #       status = 200,
+         #       mimetype="application/json"
+        #    )
+    return Response(
+                response= json.dumps({'content':data,'message':"not much"}),
+                status = 200,
+                mimetype="application/json"
+            )
 
 @app.errorhandler(404)
 def pageNotFound(e):
     if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
-        answer = jsonify({'error':'not found'})
-        answer.status_code = 404
-        return answer
-    return app.render_template('404.html'), 404
+        return Response(
+        response= json.dumps({'error':'resource not found','message':"error"}),
+        status = 404,
+        mimetype="application/json"
+    )
+    return Response(response= ("<h1>Error 404</h1>"),status = 404, mimetype="application/html")
 @app.errorhandler(500)
 def internalBreakdown(e):
     if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
-        answer = jsonify({'error':'internal servr error','message':e})
-        answer.status_code = 500
-        return answer
-    return app.render_template('500.html'), 500
+        #answer = jsonify({'error':'internal servr error','message':e})
+        #answer.status_code = 500
+        #return answer
+        return Response(
+        response= json.dumps({'error':'internal servr error','message':"error"}),
+        status = 500,
+        mimetype="application/json"
+    )
+    return Response(response= ("<h1>Error 500</h1>"),status = 500, mimetype="application/html")
 
-app.run()
+app.run(debug=True)
 
 
 #Things to be dealt with
